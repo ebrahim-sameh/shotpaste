@@ -1,0 +1,49 @@
+[package]
+name = "shotpaste"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "One screenshot, three pastes. Atomic multi-format clipboard (image + file + path) on Windows, macOS, and Linux."
+license = "MIT"
+repository = "https://github.com/ebrahim-sameh/shotpaste"
+homepage = "https://github.com/ebrahim-sameh/shotpaste"
+documentation = "https://github.com/ebrahim-sameh/shotpaste"
+readme = "README.md"
+keywords = ["screenshot", "clipboard", "productivity", "paste", "cross-platform"]
+categories = ["command-line-utilities", "filesystem"]
+authors = ["Ebrahim Sameh <dev@guardix.com>"]
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+notify = "8"
+notify-debouncer-full = "0.7"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+dirs = "5"
+anyhow = "1"
+thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt", "ansi"] }
+url = "2"
+
+# Windows: drive the clipboard ourselves (open / empty / set three formats / close).
+# We don't use clipboard-rs here because its `set(Vec<ClipboardContent>)` calls
+# EmptyClipboard mid-iteration when an Image variant is present, wiping any
+# Files / Text formats that were set before it.
+[target.'cfg(target_os = "windows")'.dependencies]
+clipboard-win = "5"
+image = { version = "0.25", default-features = false, features = ["png", "bmp"] }
+
+# macOS / Linux: clipboard-rs maps cleanly to NSPasteboard.writeObjects (atomic)
+# on macOS and to wl-clipboard-rs's copy_multi (atomic) on Wayland; on X11 it
+# owns the selection directly. The Windows path inside this crate is what's
+# broken — the others are fine for now.
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+clipboard-rs = { version = "0.3", features = ["image"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+panic = "abort"
