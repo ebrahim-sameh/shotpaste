@@ -71,13 +71,18 @@ pub fn uninstall(purge: bool) -> Result<()> {
 
 pub fn status() -> Result<()> {
     let task_ps = ps_squote(TASK_NAME);
+    // Build the output line using string concatenation rather than `"..."`
+    // interpolation, because the double quotes get stripped by powershell.exe's
+    // command-line argument parser, leaving `$($t.State)` evaluated as a pipe
+    // expression which fails with "Expressions are only allowed as the first
+    // element of a pipeline."
     let script = format!(
         "$ErrorActionPreference='Stop';\
          try {{ \
              $t = Get-ScheduledTask -TaskName {task} -ErrorAction Stop; \
              $i = Get-ScheduledTaskInfo -TaskName {task}; \
-             Write-Output \"REGISTERED|$($t.State)|$($i.LastRunTime)|$($i.LastTaskResult)\"; \
-         }} catch {{ Write-Output 'MISSING' }};",
+             'REGISTERED|' + $t.State + '|' + $i.LastRunTime + '|' + $i.LastTaskResult; \
+         }} catch {{ 'MISSING' }};",
         task = task_ps,
     );
 
