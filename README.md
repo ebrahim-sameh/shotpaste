@@ -2,6 +2,8 @@
 
 > **One screenshot, three pastes.**
 
+![shotpaste demo: one screenshot, three pastes](assets/demo.gif)
+
 [![CI](https://github.com/ebrahim-sameh/shotpaste/actions/workflows/ci.yml/badge.svg)](https://github.com/ebrahim-sameh/shotpaste/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/ebrahim-sameh/shotpaste?include_prereleases&sort=semver)](https://github.com/ebrahim-sameh/shotpaste/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
