@@ -55,8 +55,37 @@ pub fn write_png(path: &Path) -> Result<()> {
 
     // Hold the clipboard open for the entire write. One Empty, three Sets,
     // then close — that's the atomic transaction the OS exposes.
-    let _clip =
-        Clipboard::new_attempts(10).map_err(|e| anyhow!("failed to open clipboard (code {e})"))?;
+    //
+    // `Clipboard::new_attempts` retries via `Sleep(0)`, which only yields the
+    // scheduler timeslice — it returns essentially immediately. That is
+    // useless against Snipping Tool / Win+Shift+S, which hold the clipboard
+    // open for tens of ms while writing their own image at the exact instant
+    // we try to write ours; all 10 attempts fail in microseconds with
+    // ERROR_ACCESS_DENIED. Use a real sleep so we actually wait it out.
+    const OPEN_ATTEMPTS: u32 = 20;
+    const OPEN_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(100);
+    let _clip = {
+        let mut last_err = None;
+        let mut opened = None;
+        for _ in 0..OPEN_ATTEMPTS {
+            match Clipboard::new() {
+                Ok(c) => {
+                    opened = Some(c);
+                    break;
+                }
+                Err(e) => {
+                    last_err = Some(e);
+                    std::thread::sleep(OPEN_RETRY_DELAY);
+                }
+            }
+        }
+        opened.ok_or_else(|| {
+            anyhow!(
+                "failed to open clipboard after {OPEN_ATTEMPTS} attempts (code {})",
+                last_err.expect("loop ran at least once")
+            )
+        })?
+    };
     clipboard_win::empty().map_err(|e| anyhow!("failed to empty clipboard (code {e})"))?;
 
     raw::set_without_clear(formats::CF_DIB, dib)
