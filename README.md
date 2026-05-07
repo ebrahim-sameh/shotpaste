@@ -5,6 +5,8 @@
 ![shotpaste demo: one screenshot, three pastes](assets/demo.gif)
 
 [![CI](https://github.com/ebrahim-sameh/shotpaste/actions/workflows/ci.yml/badge.svg)](https://github.com/ebrahim-sameh/shotpaste/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/shotpaste.svg)](https://crates.io/crates/shotpaste)
+[![Downloads](https://img.shields.io/crates/d/shotpaste.svg)](https://crates.io/crates/shotpaste)
 [![Release](https://img.shields.io/github/v/release/ebrahim-sameh/shotpaste?include_prereleases&sort=semver)](https://github.com/ebrahim-sameh/shotpaste/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
@@ -40,6 +42,13 @@ shotpaste install
 The first line drops a single static `shotpaste` binary on disk (`~/.cargo/bin` on Linux/macOS, `%CARGO_HOME%\bin` or `~\.cargo\bin` on Windows). The second registers it to start at login.
 
 > **Want to inspect the install script first?** `curl -fsSL <url-from-above>` prints it. The releases page also publishes the sha256 of every artifact.
+
+Already have a Rust toolchain? You can also install from crates.io (builds from source — slower than the prebuilt installer above):
+
+```sh
+cargo install shotpaste
+shotpaste install
+```
 
 ## Quickstart
 
