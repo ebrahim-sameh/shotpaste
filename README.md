@@ -17,14 +17,18 @@ No more screenshotting twice, no more drag-from-Explorer, no more switching tool
 > Project is in active development — install instructions will land here once the first release ships.
 
 ```sh
-# macOS / Linux (coming soon)
-curl -fsSL https://github.com/ebrahim-sameh/shotpaste/releases/latest/download/install.sh | sh
+# macOS / Linux
+curl -fsSL https://github.com/ebrahim-sameh/shotpaste/releases/latest/download/shotpaste-installer.sh | sh
+shotpaste install
 ```
 
 ```powershell
-# Windows (coming soon)
-iwr https://github.com/ebrahim-sameh/shotpaste/releases/latest/download/install.ps1 | iex
+# Windows
+irm https://github.com/ebrahim-sameh/shotpaste/releases/latest/download/shotpaste-installer.ps1 | iex
+shotpaste install
 ```
+
+The first line drops a `shotpaste` binary into `~/.cargo/bin` (Linux/macOS) or `%LOCALAPPDATA%\Programs\shotpaste\` (Windows). The second registers it to start at login. Verify with `shotpaste status`.
 
 ## Quickstart
 
@@ -77,12 +81,14 @@ Considering for future releases:
 
 ```sh
 # macOS / Linux
-curl -fsSL https://github.com/ebrahim-sameh/shotpaste/releases/latest/download/install.sh | sh -s -- uninstall
+shotpaste uninstall
+curl -fsSL https://github.com/ebrahim-sameh/shotpaste/releases/latest/download/shotpaste-installer.sh | sh -s -- --uninstall
 ```
 
 ```powershell
 # Windows
-iwr https://github.com/ebrahim-sameh/shotpaste/releases/latest/download/install.ps1 | iex; shotpaste uninstall
+shotpaste uninstall
+# To remove the binary too, delete %LOCALAPPDATA%\Programs\shotpaste\
 ```
 
 ## Contributing
