@@ -2,19 +2,26 @@
 
 > **One screenshot, three pastes.**
 
-shotpaste copies your screenshots to the clipboard as **image**, **file**, *and* **text-path** — all at once, in a single clipboard write. Then one `Ctrl+V` (or `Cmd+V`) does the right thing in any app:
+[![CI](https://github.com/ebrahim-sameh/shotpaste/actions/workflows/ci.yml/badge.svg)](https://github.com/ebrahim-sameh/shotpaste/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/ebrahim-sameh/shotpaste?include_prereleases&sort=semver)](https://github.com/ebrahim-sameh/shotpaste/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
-- **Image-aware apps** (Slack, WhatsApp, Discord, image editors) → paste the image.
-- **File-aware contexts** (file upload zones, file managers, JIRA attachments) → paste the file.
-- **Text fields** (terminals, editors, markdown previews) → paste the path.
+shotpaste is a tiny background daemon that watches your screenshot folder. When a new screenshot lands, it copies it to the clipboard as **image bytes**, **a file-drop list**, *and* **the file path as text** — all at once, in a single clipboard write. Then **one paste** does the right thing in any app:
 
-No more screenshotting twice, no more drag-from-Explorer, no more switching tools depending on where you're pasting.
+```
+   Press PrtScn  →  shotpaste sees the new PNG  →  writes the clipboard once with:
+
+      ├──── image bytes ────►  Slack, WhatsApp, Discord, image editors, browsers
+      ├──── file-drop list ─►  JIRA upload, file pickers, file managers
+      └──── text path ──────►  terminals, editors, markdown previews
+```
+
+No more screenshotting twice. No more drag-from-Explorer. No more "wait, which paste does this app want?"
 
 ---
 
 ## Install
-
-> Project is in active development — install instructions will land here once the first release ships.
 
 ```sh
 # macOS / Linux
@@ -28,72 +35,110 @@ irm https://github.com/ebrahim-sameh/shotpaste/releases/latest/download/shotpast
 shotpaste install
 ```
 
-The first line drops a `shotpaste` binary into `~/.cargo/bin` (Linux/macOS) or `%LOCALAPPDATA%\Programs\shotpaste\` (Windows). The second registers it to start at login. Verify with `shotpaste status`.
+The first line drops a single static `shotpaste` binary on disk (`~/.cargo/bin` on Linux/macOS, `%CARGO_HOME%\bin` or `~\.cargo\bin` on Windows). The second registers it to start at login.
+
+> **Want to inspect the install script first?** `curl -fsSL <url-from-above>` prints it. The releases page also publishes the sha256 of every artifact.
 
 ## Quickstart
 
 1. Press your normal screenshot shortcut (Win+PrtScn, Cmd+Shift+3, PrtScn).
-2. Paste anywhere.
+2. Paste anywhere with `Ctrl+V` / `Cmd+V`.
 3. That's it.
+
+Verify with `shotpaste status`. The default watched folder is your OS's standard screenshot directory; pass a different path to `shotpaste watch` to override.
+
+## Why not just use ShareX / Greenshot / Snipping Tool?
+
+Existing screenshot tools either give you the **image** on the clipboard or the **file path**, never both — and almost none of them are cross-platform. shotpaste is a single static binary that does all three formats simultaneously on Windows, macOS, and Linux.
+
+| Tool | Image paste | File-drop paste | Path-text paste | All three in one paste | Cross-platform | FOSS | Price |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| **shotpaste**           | ✓ | ✓ | ✓ | **✓** | Win + macOS + Linux | ✓ MIT | Free |
+| ShareX                  | ✓ | ✓ | ✓ | ✗ | Windows only | ✓ MIT | Free |
+| Greenshot / Flameshot   | ✓ | ✗ | ✗ | ✗ | varies | ✓ | Free |
+| Lightshot               | ✓ | ✗ | ✗ | ✗ | Win + macOS | ✗ | Free |
+| CopyCut / winclipshot   | ✗ | ✗ | ✓ | ✗ | Windows only | ✓ | Free |
+| Snagit                  | ✓ | ✗ | ✗ | ✗ | Win + macOS | ✗ | Paid |
+| Snipping Tool / macOS Screenshot | ✓ | ✗ | ✗ | ✗ | native | bundled | Free |
+
+ShareX has separate "Copy image" and "Copy file path" after-capture actions, but doing both formats from a single capture has been a [long-standing open feature request](https://github.com/ShareX/ShareX/issues/7651). shotpaste does it by default.
+
+## Use cases
+
+**Bug report to your team.** A 500 error appears. You screenshot the stack-trace overlay. In your team's Slack thread: `Cmd+V` → image attached, everyone sees it. Click into the JIRA ticket's "Drop files here" zone, `Cmd+V` again → same screenshot uploads as a real `.png` file attachment, not a paste-as-image. Two pastes, zero file-manager round-trips.
+
+**UI bug from QA → GitHub PR.** QA screenshots a misaligned modal. Slack: `Cmd+V` → image inline for the squad. GitHub PR description: `Cmd+V` → path pasted, ready to wrap as `![](...)`. Same clipboard, both contexts.
+
+**Notion + a markdown changelog.** You're writing release notes in Notion and a CHANGELOG.md at the same time. Same screenshot. Notion: `Cmd+V` renders inline. VS Code on the markdown file: `Cmd+V` pastes the absolute path. The image is right there in both surfaces, no alt-tabbing.
+
+**WhatsApp Web + a remote terminal.** Screenshot a failing CI log. WhatsApp Web in the browser: `Ctrl+V` → image attached to the team chat. SSH session in the next tab: `vim "$(Get-Clipboard)"` (PowerShell) or `vim "$(xclip -o)"` (Linux) opens the very same screenshot — because the path text is also on the clipboard.
 
 ## How it works
 
-shotpaste runs as a tiny background daemon that watches your screenshots folder. When a new PNG appears, it builds a single clipboard entry that advertises three formats simultaneously — image bytes, a file-drop list, and the file path as text — using each OS's native multi-format clipboard API:
+1. A small background daemon watches your screenshot folder using each OS's native filesystem-event API (`ReadDirectoryChangesW` on Windows, `FSEvents` on macOS, `inotify` on Linux).
+2. When a new `.png` lands, the daemon decodes it and builds a single multi-format clipboard write.
+3. The OS's native multi-format clipboard API gets all three formats in one transaction — `IDataObject` on Windows, `NSPasteboard.writeObjects:` on macOS, atomic `wl_data_source` (Wayland) or X11 selection ownership (X11) on Linux.
 
-- **Windows**: `IDataObject` with `CF_BITMAP` + `CF_HDROP` + `CF_UNICODETEXT`
-- **macOS**: `NSPasteboard.writeObjects:` with `NSPasteboardTypePNG` + `NSPasteboardTypeFileURL` + `NSPasteboardTypeString`
-- **Linux**: Wayland `wl_data_source` with `image/png` + `text/uri-list` + `text/plain;charset=utf-8`, or X11 selection ownership advertising the same MIMEs
-
-It's about 1 MB of compiled Rust, with no runtime dependencies on any platform.
-
-## Why not just use ShareX / Greenshot / CopyCut?
-
-Existing screenshot tools give you EITHER an image OR a path on the clipboard. shotpaste is the first to give you all three formats from a single capture.
-
-| Tool | Image paste | File-drop paste | Path-text paste | All three at once | Cross-platform |
-|---|---|---|---|---|---|
-| **shotpaste** | ✓ | ✓ | ✓ | **✓** | Win + macOS + Linux |
-| ShareX | ✓ | ✓ (separate action) | ✓ (separate action) | ✗ | Windows |
-| Greenshot / Flameshot / Lightshot | ✓ | ✗ | ✗ | ✗ | varies |
-| CopyCut / winclipshot | ✗ | ✗ | ✓ | ✗ | Windows |
-| Snagit | ✓ | ✗ | ✗ | ✗ | Win + macOS (paid) |
-| Snipping Tool / macOS Screenshot | ✓ | ✗ | ✗ | ✗ | native |
+About 1 MB of compiled Rust per platform, statically linked, zero runtime dependencies you have to install yourself.
 
 ## Configuration
 
-Config file at `~/.config/shotpaste/config.toml` (created on first install). You can:
+Default watched folder per platform (override by passing `shotpaste watch <path>`):
 
-- Change the watched folder (default: your OS screenshot folder)
-- Toggle individual clipboard formats
-- Set custom log level
+- **Windows**: `%USERPROFILE%\Pictures\Screenshots` (Win+PrtScn default)
+- **macOS**: `~/Desktop` (Cmd+Shift+3 / 4 / 5 default — to relocate, run `defaults write com.apple.screencapture location ~/Pictures/Screenshots && killall SystemUIServer`)
+- **Linux**: `${XDG_PICTURES_DIR:-$HOME/Pictures}/Screenshots` (the GNOME / KDE Spectacle default)
 
-## Roadmap
+Logs:
+- Windows: `%LOCALAPPDATA%\shotpaste\shotpaste.log` (when present), otherwise stderr if run from a console.
+- macOS: `~/Library/Logs/shotpaste.log`
+- Linux: `journalctl --user -u shotpaste`
 
-Considering for future releases:
+Set `SHOTPASTE_LOG=debug` in the environment for verbose tracing.
 
-- Custom watch folders (multiple dirs, OneDrive, Dropbox)
-- Per-format toggles
-- Optional auto-upload (imgur / 0x0.st) as a 4th clipboard format
-- OCR text format (paste OCR'd text into editors)
-- Filename templates
+## Privacy
+
+shotpaste is a local-only tool. **No network calls, no telemetry, no uploads.** The only network connection is when you run the install script — to download the release archive from GitHub Releases.
 
 ## Uninstall
 
 ```sh
 # macOS / Linux
-shotpaste uninstall
-curl -fsSL https://github.com/ebrahim-sameh/shotpaste/releases/latest/download/shotpaste-installer.sh | sh -s -- --uninstall
+shotpaste uninstall          # removes autostart entry
+shotpaste uninstall --purge  # also removes config dir
+rm ~/.cargo/bin/shotpaste    # removes the binary
 ```
 
 ```powershell
 # Windows
-shotpaste uninstall
-# To remove the binary too, delete %LOCALAPPDATA%\Programs\shotpaste\
+shotpaste uninstall          # removes Scheduled Task
+shotpaste uninstall --purge  # also removes config dir
+Remove-Item ~\.cargo\bin\shotpaste.exe
 ```
+
+## Roadmap
+
+Considering for future releases (no commitments):
+
+- Custom watch folders (multiple dirs, OneDrive, Dropbox)
+- Per-format toggles (disable file-drop on systems where it conflicts)
+- Optional auto-upload format (imgur / 0x0.st URL alongside image+file+path, opt-in only)
+- Filename templates (`{app}_{yyyy-MM-dd}_{HHmmss}.png`)
+- OCR text format — paste OCR'd text into editors instead of the path
+- Windows ARM64 build (currently deferred — cargo-dist 0.31 cross-compile container has an apt-get prompt issue)
 
 ## Contributing
 
-Issues and PRs welcome. Run `cargo test` and `cargo clippy --all-targets -- -D warnings` before opening a PR.
+Issues and PRs welcome. The code is small (~700 lines of Rust). Before opening a PR:
+
+```sh
+cargo build
+cargo test
+cargo clippy --all-targets -- -D warnings
+cargo fmt --all -- --check
+```
+
+CI runs the same on Ubuntu, Windows, and macOS.
 
 ## License
 
@@ -102,4 +147,5 @@ MIT — see [LICENSE](./LICENSE).
 ## Acknowledgements
 
 - Inspired by [`Higangssh/winclipshot`](https://github.com/Higangssh/winclipshot), which solves the path-paste half of this problem on Windows.
-- Built on excellent crates: [`clipboard-rs`](https://github.com/ChurchTao/clipboard-rs), [`wl-clipboard-rs`](https://github.com/YaLTeR/wl-clipboard-rs), [`notify`](https://github.com/notify-rs/notify).
+- Built on excellent crates: [`clipboard-win`](https://github.com/DoumanAsh/clipboard-win), [`clipboard-rs`](https://github.com/ChurchTao/clipboard-rs), [`notify`](https://github.com/notify-rs/notify), [`notify-debouncer-full`](https://github.com/notify-rs/notify), [`image`](https://github.com/image-rs/image), [`clap`](https://github.com/clap-rs/clap).
+- Release pipeline: [`cargo-dist`](https://github.com/axodotdev/cargo-dist).
