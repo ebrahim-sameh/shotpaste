@@ -1,10 +1,10 @@
-// Hide the console window on Windows release builds. Dev builds keep stdio
-// for `tracing` output. The watcher daemon never needs a console.
-#![cfg_attr(
-    all(target_os = "windows", not(debug_assertions)),
-    windows_subsystem = "windows"
-)]
-
+// Earlier versions set `windows_subsystem = "windows"` to hide the console
+// for the daemon, but that also silences CLI subcommands like `status` /
+// `install` / `uninstall` because the binary has no console attached when
+// invoked from a shell. The Windows installer now writes a VBS shim that
+// launches the watcher via `wscript.exe` with the hidden window style, so
+// the binary itself can stay a normal console subsystem and CLI output
+// works as expected.
 mod clipboard;
 mod config;
 mod installer;
