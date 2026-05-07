@@ -51,17 +51,19 @@ Verify with `shotpaste status`. The default watched folder is your OS's standard
 
 Existing screenshot tools either give you the **image** on the clipboard or the **file path**, never both — and almost none of them are cross-platform. shotpaste is a single static binary that does all three formats simultaneously on Windows, macOS, and Linux.
 
-| Tool | Image paste | File-drop paste | Path-text paste | All three in one paste | Cross-platform | FOSS | Price |
-|---|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| **shotpaste**           | ✓ | ✓ | ✓ | **✓** | Win + macOS + Linux | ✓ MIT | Free |
-| ShareX                  | ✓ | ✓ | ✓ | ✗ | Windows only | ✓ MIT | Free |
-| Greenshot / Flameshot   | ✓ | ✗ | ✗ | ✗ | varies | ✓ | Free |
-| Lightshot               | ✓ | ✗ | ✗ | ✗ | Win + macOS | ✗ | Free |
-| CopyCut / winclipshot   | ✗ | ✗ | ✓ | ✗ | Windows only | ✓ | Free |
-| Snagit                  | ✓ | ✗ | ✗ | ✗ | Win + macOS | ✗ | Paid |
-| Snipping Tool / macOS Screenshot | ✓ | ✗ | ✗ | ✗ | native | bundled | Free |
+| Tool | Image paste | File-drop paste | Path-text paste | All three in one paste | AI coding tools | Cross-platform | FOSS | Price |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| **shotpaste**           | ✓ | ✓ | ✓ | **✓** | **✓** | Win + macOS + Linux | ✓ MIT | Free |
+| ShareX                  | ✓ | ✓ | ✓ | ✗ | ✗ | Windows only | ✓ MIT | Free |
+| Greenshot / Flameshot   | ✓ | ✗ | ✗ | ✗ | ✗ | varies | ✓ | Free |
+| Lightshot               | ✓ | ✗ | ✗ | ✗ | ✗ | Win + macOS | ✗ | Free |
+| CopyCut / winclipshot   | ✗ | ✗ | ✓ | ✗ | ✗ | Windows only | ✓ | Free |
+| Snagit                  | ✓ | ✗ | ✗ | ✗ | ✗ | Win + macOS | ✗ | Paid |
+| Snipping Tool / macOS Screenshot | ✓ | ✗ | ✗ | ✗ | ✗ | native | bundled | Free |
 
 ShareX has separate "Copy image" and "Copy file path" after-capture actions, but doing both formats from a single capture has been a [long-standing open feature request](https://github.com/ShareX/ShareX/issues/7651). shotpaste does it by default.
+
+**Coming from [`Higangssh/winclipshot`](https://github.com/Higangssh/winclipshot)?** shotpaste does the same path-on-clipboard trick — but puts it *alongside* the image and file-drop formats instead of replacing them. You keep the path-paste superpower in your terminal without losing image-paste in Slack/WhatsApp/Discord. And it works on macOS and Linux, not just Windows.
 
 ## Use cases
 
@@ -72,6 +74,8 @@ ShareX has separate "Copy image" and "Copy file path" after-capture actions, but
 **Notion + a markdown changelog.** You're writing release notes in Notion and a CHANGELOG.md at the same time. Same screenshot. Notion: `Cmd+V` renders inline. VS Code on the markdown file: `Cmd+V` pastes the absolute path. The image is right there in both surfaces, no alt-tabbing.
 
 **WhatsApp Web + a remote terminal.** Screenshot a failing CI log. WhatsApp Web in the browser: `Ctrl+V` → image attached to the team chat. SSH session in the next tab: `vim "$(Get-Clipboard)"` (PowerShell) or `vim "$(xclip -o)"` (Linux) opens the very same screenshot — because the path text is also on the clipboard.
+
+**Screenshot → Claude Code / Cursor.** A weird CSS bug appears in your browser. Screenshot it. In Claude Code or Cursor's chat panel: `Cmd+V` → image attaches and the agent *sees* the bug. Need it to read the source file too? Same paste in the agent's terminal or a `@file` reference — the absolute path is on the clipboard, so the agent can `Read` the file and grep nearby code. One screenshot, both halves of the loop.
 
 ## How it works
 

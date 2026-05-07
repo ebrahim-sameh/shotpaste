@@ -1,6 +1,6 @@
 [package]
 name = "shotpaste"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 rust-version = "1.85"
 description = "One screenshot, three pastes. Atomic multi-format clipboard (image + file + path) on Windows, macOS, and Linux."
@@ -9,7 +9,7 @@ repository = "https://github.com/ebrahim-sameh/shotpaste"
 homepage = "https://github.com/ebrahim-sameh/shotpaste"
 documentation = "https://github.com/ebrahim-sameh/shotpaste"
 readme = "README.md"
-keywords = ["screenshot", "clipboard", "productivity", "paste", "cross-platform"]
+keywords = ["screenshot", "clipboard", "cli", "paste", "cross-platform"]
 categories = ["command-line-utilities", "filesystem"]
 authors = ["Ebrahim Sameh <dev@guardix.com>"]
 
