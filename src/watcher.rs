@@ -1,8 +1,8 @@
 use crate::clipboard;
 use anyhow::{Context, Result};
-use notify::{EventKind, RecursiveMode, event::CreateKind};
 #[cfg(target_os = "linux")]
 use notify::event::{ModifyKind, RenameMode};
+use notify::{EventKind, RecursiveMode, event::CreateKind};
 use notify_debouncer_full::{DebounceEventResult, new_debouncer};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
