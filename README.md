@@ -111,6 +111,21 @@ Logs:
 
 Set `SHOTPASTE_LOG=debug` in the environment for verbose tracing.
 
+**macOS — file-drop is disabled by default.** Mac Catalyst apps (WhatsApp, Messages, News, Voice Memos, …) bridge `NSPasteboard` to iOS-style `UIPasteboard` handlers that don't expect Mac `file://` paths and crash with `SIGABRT` when they see a file URL on the clipboard. shotpaste therefore writes only the image and path-text formats on macOS by default — `Cmd+V` still works correctly in chat apps, browsers, image editors, and code editors. To re-enable the file-drop format (e.g. so `Cmd+V` in Finder pastes the screenshot as a file), set `SHOTPASTE_INCLUDE_FILES=1` in the LaunchAgent's environment:
+
+```sh
+# Edit ~/Library/LaunchAgents/dev.shotpaste.watcher.plist and add inside <dict>:
+#   <key>EnvironmentVariables</key>
+#   <dict>
+#     <key>SHOTPASTE_INCLUDE_FILES</key>
+#     <string>1</string>
+#   </dict>
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/dev.shotpaste.watcher.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.shotpaste.watcher.plist
+```
+
+Windows and Linux are unaffected and write all three formats unconditionally.
+
 ## Privacy
 
 shotpaste is a local-only tool. **No network calls, no telemetry, no uploads.** The only network connection is when you run the install script — to download the release archive from GitHub Releases.

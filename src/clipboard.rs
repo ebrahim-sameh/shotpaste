@@ -121,15 +121,37 @@ pub fn write_png(path: &Path) -> Result<()> {
 
     let ctx = ClipboardContext::new().map_err(|e| anyhow!("failed to open clipboard: {e}"))?;
 
-    let payload = vec![
+    // macOS: omit file URLs by default. Mac Catalyst apps (WhatsApp, Messages,
+    // News, Voice Memos, …) bridge NSPasteboard to iOS-style UIPasteboard
+    // handlers that don't expect Mac file:// paths and crash with SIGABRT in
+    // their paste pipeline (confirmed via crash report: WhatsApp 26.17.72 on
+    // macOS 14.4 abort()s deep in SharedModules during the Cmd+V event).
+    // SHOTPASTE_INCLUDE_FILES=1 restores file paste for users who paste into
+    // Finder and don't hit Catalyst apps.
+    #[cfg(target_os = "macos")]
+    let include_files = matches!(
+        std::env::var("SHOTPASTE_INCLUDE_FILES").ok().as_deref(),
+        Some("1" | "true" | "yes" | "on")
+    );
+    #[cfg(not(target_os = "macos"))]
+    let include_files = true;
+
+    let mut payload = vec![
         ClipboardContent::Image(image),
-        ClipboardContent::Files(vec![path_str.clone()]),
         ClipboardContent::Text(path_str.clone()),
     ];
+    if include_files {
+        payload.push(ClipboardContent::Files(vec![path_str.clone()]));
+    }
 
     ctx.set(payload)
         .map_err(|e| anyhow!("failed to set clipboard: {e}"))?;
 
-    info!(path = %path.display(), "wrote screenshot to clipboard (image + file + path)");
+    let formats = if include_files {
+        "image + path + file"
+    } else {
+        "image + path"
+    };
+    info!(path = %path.display(), formats, "wrote screenshot to clipboard");
     Ok(())
 }
