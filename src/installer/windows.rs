@@ -50,6 +50,17 @@ pub fn install() -> Result<()> {
     let arg_ps = ps_squote(&format!("\"{vbs_str}\""));
     let task_ps = ps_squote(TASK_NAME);
 
+    // When called from the tray menu's "Start at login" toggle, the tray's
+    // watcher is already running. Starting the Scheduled Task immediately
+    // would spawn a *second* watcher under wscript.exe, and the two would
+    // fight over the clipboard. Skip the start step in that case — Windows
+    // will auto-start the task on next logon as usual.
+    let from_tray = env::var("SHOTPASTE_FROM_TRAY").is_ok();
+    let start_line = if from_tray {
+        ""
+    } else {
+        "Start-ScheduledTask -TaskName {task};"
+    };
     let script = format!(
         "$ErrorActionPreference='Stop';\
          $action = New-ScheduledTaskAction -Execute {exe} -Argument {arg};\
@@ -58,10 +69,11 @@ pub fn install() -> Result<()> {
             -DontStopIfGoingOnBatteries -StartWhenAvailable;\
          $task = New-ScheduledTask -Action $action -Trigger $trigger -Settings $settings;\
          Register-ScheduledTask -TaskName {task} -InputObject $task -Force | Out-Null;\
-         Start-ScheduledTask -TaskName {task};",
+         {start}",
         exe = exe_ps,
         arg = arg_ps,
         task = task_ps,
+        start = start_line.replace("{task}", &task_ps),
     );
 
     let output = run_powershell(&script).context("failed to invoke PowerShell")?;

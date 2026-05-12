@@ -105,11 +105,23 @@ Default watched folder per platform (override by passing `shotpaste watch <path>
 - **Linux**: `${XDG_PICTURES_DIR:-$HOME/Pictures}/Screenshots` (the GNOME / KDE Spectacle default)
 
 Logs:
-- Windows: `%LOCALAPPDATA%\shotpaste\shotpaste.log` (when present), otherwise stderr if run from a console.
+- Windows: `%LOCALAPPDATA%\shotpaste\shotpaste.log.<date>` (daily-rolling, written whenever the tray is active), otherwise stderr if run from a console.
 - macOS: `~/Library/Logs/shotpaste.log`
 - Linux: `journalctl --user -u shotpaste`
 
 Set `SHOTPASTE_LOG=debug` in the environment for verbose tracing.
+
+### Tray UI
+
+![shotpaste tray menu — right-click shows watching dir, last capture time, session push counter, open/replay/log actions, autostart + notify toggles, quit](assets/tray-menu.png)
+
+When run interactively (`shotpaste watch` from a desktop session, or auto-started by the installer), shotpaste shows a small system-tray icon with a right-click menu: open the watched folder, replay the last screenshot, toggle "Start at login", and toggle success/error toast notifications. A toast pops up on each successful push (bursts coalesce inside a ~1.5s window). Errors always toast.
+
+Skip the tray with `shotpaste watch --headless` — useful in SSH sessions, servers, or when running under another supervisor. Linux without a display (`$DISPLAY` and `$WAYLAND_DISPLAY` both unset) auto-detects and falls back to headless.
+
+To build a slim binary without any GUI deps, use `cargo install shotpaste --no-default-features` — drops `tao` / `tray-icon` / `notify-rust` (~3 MB off the binary).
+
+**GNOME users:** GNOME doesn't show legacy tray icons natively. Install [`gnome-shell-extension-appindicator`](https://extensions.gnome.org/extension/615/appindicator-support/) (it's pre-packaged on Ubuntu) to see shotpaste's tray icon. The watcher and toast notifications work either way.
 
 **macOS — file-drop is disabled by default.** Mac Catalyst apps (WhatsApp, Messages, News, Voice Memos, …) bridge `NSPasteboard` to iOS-style `UIPasteboard` handlers that don't expect Mac `file://` paths and crash with `SIGABRT` when they see a file URL on the clipboard. shotpaste therefore writes only the image and path-text formats on macOS by default — `Cmd+V` still works correctly in chat apps, browsers, image editors, and code editors. To re-enable the file-drop format (e.g. so `Cmd+V` in Finder pastes the screenshot as a file), set `SHOTPASTE_INCLUDE_FILES=1` in the LaunchAgent's environment:
 

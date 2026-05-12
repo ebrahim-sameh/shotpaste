@@ -15,9 +15,28 @@ use tracing::{debug, error, info, warn};
 /// LRU, since at this size the policy doesn't matter.
 const SEEN_CAP: usize = 256;
 
+/// Observer for the watcher loop. The headless CLI path uses [`LogSink`];
+/// tray mode uses a `ChannelSink` (defined in `tray.rs`) that forwards
+/// events into the event loop. Decoupling lets the watcher stay free of
+/// `tao`/`crossbeam` types so it builds with `--no-default-features`.
+pub trait WatcherSink: Send + 'static {
+    fn pushed(&self, path: &Path);
+    fn failed(&self, path: &Path, err: &anyhow::Error);
+}
+
+/// Default sink — relies purely on `tracing` logs already emitted by the
+/// watcher and clipboard modules. Cheap, allocation-free.
+pub struct LogSink;
+
+impl WatcherSink for LogSink {
+    fn pushed(&self, _path: &Path) {}
+    fn failed(&self, _path: &Path, _err: &anyhow::Error) {}
+}
+
 /// Watch a directory for newly-created PNG files and push each one to the
-/// clipboard. Blocks the current thread until the channel closes.
-pub fn run(dir: &Path) -> Result<()> {
+/// clipboard, notifying `sink` after each success/failure. Blocks the
+/// current thread until the channel closes.
+pub fn run<S: WatcherSink>(dir: &Path, sink: S) -> Result<()> {
     if !dir.exists() {
         std::fs::create_dir_all(dir)
             .with_context(|| format!("failed to create watch dir {}", dir.display()))?;
@@ -63,9 +82,13 @@ pub fn run(dir: &Path) -> Result<()> {
                             continue;
                         }
                         debug!(path = %path.display(), kind = ?event.kind, "screenshot event");
-                        if let Err(e) = clipboard::write_png(path) {
-                            error!("failed to set clipboard for {}: {e:#}", path.display());
-                            continue;
+                        match clipboard::write_png(path) {
+                            Ok(()) => sink.pushed(path),
+                            Err(e) => {
+                                error!("failed to set clipboard for {}: {e:#}", path.display());
+                                sink.failed(path, &e);
+                                continue;
+                            }
                         }
                         if let Some(fp) = fingerprint {
                             if seen.len() >= SEEN_CAP && !seen.contains_key(path) {

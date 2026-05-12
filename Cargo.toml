@@ -1,6 +1,6 @@
 [package]
 name = "shotpaste"
-version = "0.1.6"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.85"
 description = "One screenshot, three pastes. Atomic multi-format clipboard (image + file + path) on Windows, macOS, and Linux."
@@ -12,6 +12,27 @@ readme = "README.md"
 keywords = ["screenshot", "clipboard", "cli", "paste", "cross-platform"]
 categories = ["command-line-utilities", "filesystem"]
 authors = ["Ebrahim Sameh <ebrahimsameh16@gmail.com>"]
+# Trim large preview assets from the crate package — they're only referenced
+# by README, which crates.io rewrites to GitHub raw URLs at render time.
+# `icon.png` / `icon-template.png` are NOT excluded: they're `include_bytes!`'d
+# by the tray module and need to be in the published source.
+exclude = [
+    "assets/demo.gif",
+    "assets/demo.png",
+    "assets/tray-menu.png",
+]
+
+[features]
+default = ["tray"]
+# Bundles the system-tray UI + toast notifications. Disable with
+# `--no-default-features` to build a slimmer headless-only binary
+# (no event loop, no GUI deps).
+tray = [
+    "dep:tao",
+    "dep:tray-icon",
+    "dep:notify-rust",
+    "dep:tracing-appender",
+]
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
@@ -25,6 +46,17 @@ thiserror = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt", "ansi"] }
 url = "2"
+# PNG decoder shared by the Windows clipboard path and the tray-icon loader.
+# Tiny when restricted to png-only — broaden via the platform block below.
+image = { version = "0.25", default-features = false, features = ["png"] }
+# Cross-platform file locks for the single-instance guard on non-Windows.
+fs2 = "0.4"
+
+# Tray + toast deps — optional, gated by the `tray` feature.
+tao = { version = "0.35", optional = true }
+tray-icon = { version = "0.24", optional = true }
+notify-rust = { version = "4", optional = true }
+tracing-appender = { version = "0.2", optional = true }
 
 # Windows: drive the clipboard ourselves (open / empty / set three formats / close).
 # We don't use clipboard-rs here because its `set(Vec<ClipboardContent>)` calls
@@ -32,7 +64,15 @@ url = "2"
 # Files / Text formats that were set before it.
 [target.'cfg(target_os = "windows")'.dependencies]
 clipboard-win = "5"
+# Add `bmp` on top of the cross-platform png-only spec — the clipboard module
+# re-encodes decoded pixels as BMP for CF_DIB.
 image = { version = "0.25", default-features = false, features = ["png", "bmp"] }
+# Single-instance mutex (Local\Shotpaste) — kept off the `tray` feature so
+# headless `--no-default-features` builds still get it.
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+] }
 
 # macOS / Linux: clipboard-rs maps cleanly to NSPasteboard.writeObjects (atomic)
 # on macOS and to wl-clipboard-rs's copy_multi (atomic) on Wayland; on X11 it
