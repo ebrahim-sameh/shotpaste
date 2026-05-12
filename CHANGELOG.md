@@ -4,6 +4,32 @@ All notable changes to shotpaste are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-05-12
+
+### Added
+- **Watch multiple folders at once.** Pass several paths on the CLI
+  (`shotpaste watch ~/Pictures/Screenshots ~/Desktop ~/Downloads`) or
+  list them as `watch_dirs = [...]` in `<config>/shotpaste/config.toml`.
+  One process, one debouncer, one atomic clipboard push per new PNG no
+  matter which folder it lands in.
+- **Tray-editable watch list.** New "Add watched folder…" menu item
+  opens a native folder picker (via the `rfd` crate). With 2+ folders
+  watched, the menu shows a "Watched folders ▶" submenu where each
+  entry can be opened in the file manager or removed from the watch
+  list. Removal is blocked at the last folder to avoid orphaning the
+  daemon.
+
+### Changed
+- `Config` schema: `watch_dir: Option<PathBuf>` → `watch_dirs: Vec<PathBuf>`.
+  Existing v0.2.0 configs migrate transparently — the legacy field is
+  folded into `watch_dirs` on first load and dropped on next save.
+- The watcher loop can now be shut down cleanly (~500 ms latency) via
+  a new `watcher::run_until` entry point. The headless `watcher::run`
+  wrapper preserves the prior never-stops semantics.
+- Tray menu shape adapts to folder count: 1 folder → flat "Open
+  watched folder" (today's layout); 2+ folders → "Watched folders ▶"
+  submenu. Tooltip lists all watched paths on hover.
+
 ## [0.2.0] - 2026-05-12
 
 ### Added

@@ -18,9 +18,10 @@ mod tray;
 #[cfg(all(feature = "tray", target_os = "windows"))]
 mod windows_shortcut;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+use tracing::warn;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser, Debug)]
@@ -28,9 +29,9 @@ use tracing_subscriber::EnvFilter;
     name = "shotpaste",
     version,
     about = "One screenshot, three pastes — atomic multi-format clipboard.",
-    long_about = "shotpaste watches a folder for new screenshot PNGs and writes each one to \
-        the OS clipboard with image, file-drop, and text-path formats simultaneously, \
-        so a single Ctrl+V (or Cmd+V) does the right thing in any app."
+    long_about = "shotpaste watches one or more folders for new screenshot PNGs and writes \
+        each one to the OS clipboard with image, file-drop, and text-path formats \
+        simultaneously, so a single Ctrl+V (or Cmd+V) does the right thing in any app."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -39,11 +40,14 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Run the watcher in the foreground. Writes new PNGs in the watched
-    /// directory to the clipboard.
+    /// Run the watcher in the foreground. Writes new PNGs in any of the
+    /// watched directories to the clipboard.
     Watch {
-        /// Directory to watch. Defaults to the OS screenshot folder.
-        path: Option<PathBuf>,
+        /// Directories to watch. With no args, uses `watch_dirs` from
+        /// config.toml, or the OS default screenshot folder if config is
+        /// empty. Pass one or more paths to override for this invocation.
+        #[arg(num_args = 0..)]
+        paths: Vec<PathBuf>,
 
         /// Skip the tray UI and toasts; behave like the pre-tray CLI.
         /// Auto-enabled on Linux when no display is detected.
@@ -148,38 +152,86 @@ fn display_available() -> bool {
     true
 }
 
-fn run_headless(dir: &Path) -> Result<()> {
+/// Resolve the effective watch-dir list. Precedence:
+///   1. CLI positional args (if any).
+///   2. `cfg.watch_dirs` from config.toml (if non-empty).
+///   3. `[config::default_watch_dir()?]` — single-element fallback.
+///
+/// Canonicalizes when possible (preserves the user's original path if
+/// canonicalize fails, so non-existent dirs still pass through to the
+/// watcher which decides whether to skip them) and dedups.
+#[cfg_attr(not(feature = "tray"), allow(dead_code))]
+fn resolve_watch_dirs(cli: &[PathBuf], cfg: &config::Config) -> Result<Vec<PathBuf>> {
+    let source: Vec<PathBuf> = if !cli.is_empty() {
+        cli.to_vec()
+    } else if !cfg.watch_dirs.is_empty() {
+        cfg.watch_dirs.clone()
+    } else {
+        vec![config::default_watch_dir().context("could not resolve default watch dir")?]
+    };
+
+    let mut out: Vec<PathBuf> = Vec::with_capacity(source.len());
+    for p in source {
+        let resolved = std::fs::canonicalize(&p).unwrap_or(p);
+        if !out.iter().any(|existing| existing == &resolved) {
+            out.push(resolved);
+        }
+    }
+    Ok(out)
+}
+
+/// Auto-create only when the watcher would otherwise run with zero dirs.
+/// Used for the single-default fallback so first-run UX still works on a
+/// fresh machine where `~/Pictures/Screenshots` doesn't exist yet.
+fn ensure_default_dir_exists(dir: &std::path::Path) {
+    if !dir.exists() {
+        if let Err(e) = std::fs::create_dir_all(dir) {
+            warn!(dir = %dir.display(), error = %e, "could not create default watch dir");
+        }
+    }
+}
+
+fn run_headless(dirs: &[PathBuf]) -> Result<()> {
     init_tracing_stderr();
     let _guard = single_instance::acquire()?;
-    watcher::run(dir, watcher::LogSink)
+    watcher::run(dirs, watcher::LogSink)
 }
 
 #[cfg(feature = "tray")]
-fn run_with_tray(dir: &Path) -> Result<()> {
+fn run_with_tray(dirs: Vec<PathBuf>) -> Result<()> {
     let _log_guard = init_tracing_with_file();
     let _guard = single_instance::acquire()?;
-    tray::run(dir)
+    tray::run(dirs)
 }
 
 #[cfg(not(feature = "tray"))]
-fn run_with_tray(dir: &Path) -> Result<()> {
-    // Compiled without tray support — fall through to headless behavior.
-    run_headless(dir)
+fn run_with_tray(dirs: Vec<PathBuf>) -> Result<()> {
+    run_headless(&dirs)
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Watch { path, headless } => {
-            let dir = match path {
-                Some(p) => p,
-                None => config::default_watch_dir()?,
-            };
+        Command::Watch { paths, headless } => {
+            #[cfg(feature = "tray")]
+            let cfg = config::Config::load();
+            #[cfg(not(feature = "tray"))]
+            let cfg = config::Config::default();
+
+            let dirs = resolve_watch_dirs(&paths, &cfg)?;
+
+            // First-run UX: if we're using the single default-fallback dir,
+            // auto-create it so `shotpaste install`-then-screenshot just
+            // works on a fresh machine.
+            if paths.is_empty() && cfg.watch_dirs.is_empty() && dirs.len() == 1 {
+                ensure_default_dir_exists(&dirs[0]);
+            }
+
             if headless || !display_available() {
-                run_headless(&dir)
+                run_headless(&dirs)
             } else {
-                run_with_tray(&dir)
+                run_with_tray(dirs)
             }
         }
         Command::Install => {

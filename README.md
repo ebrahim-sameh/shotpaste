@@ -98,11 +98,33 @@ About 1 MB of compiled Rust per platform, statically linked, zero runtime depend
 
 ## Configuration
 
-Default watched folder per platform (override by passing `shotpaste watch <path>`):
+Default watched folder per platform (used when neither CLI args nor config specifies):
 
 - **Windows**: `%USERPROFILE%\Pictures\Screenshots` (Win+PrtScn default)
 - **macOS**: `~/Desktop` (Cmd+Shift+3 / 4 / 5 default — to relocate, run `defaults write com.apple.screencapture location ~/Pictures/Screenshots && killall SystemUIServer`)
 - **Linux**: `${XDG_PICTURES_DIR:-$HOME/Pictures}/Screenshots` (the GNOME / KDE Spectacle default)
+
+### Watch multiple folders
+
+Pass several paths on the CLI:
+
+```sh
+shotpaste watch ~/Pictures/Screenshots ~/Desktop/Scratch ~/Downloads/Captures
+```
+
+Or set `watch_dirs` in `<config_dir>/shotpaste/config.toml` (read by the auto-started daemon):
+
+```toml
+notify_on_success = true
+notify_on_error = true
+watch_dirs = [
+    "C:/Users/you/Pictures/Screenshots",
+    "C:/Users/you/OneDrive/Pictures/Screenshots",
+    "C:/Users/you/Desktop/Scratch",
+]
+```
+
+Precedence: **CLI args** > **`watch_dirs` in config.toml** > **OS default**. One process handles all folders — no per-folder daemon. From the tray icon you can also click **"Add watched folder…"** to pick a folder graphically, or **Remove from watch list** on any entry to drop it.
 
 Logs:
 - Windows: `%LOCALAPPDATA%\shotpaste\shotpaste.log.<date>` (daily-rolling, written whenever the tray is active), otherwise stderr if run from a console.
@@ -115,7 +137,9 @@ Set `SHOTPASTE_LOG=debug` in the environment for verbose tracing.
 
 ![shotpaste tray menu — right-click shows watching dir, last capture time, session push counter, open/replay/log actions, autostart + notify toggles, quit](assets/tray-menu.png)
 
-When run interactively (`shotpaste watch` from a desktop session, or auto-started by the installer), shotpaste shows a small system-tray icon with a right-click menu: open the watched folder, replay the last screenshot, toggle "Start at login", and toggle success/error toast notifications. A toast pops up on each successful push (bursts coalesce inside a ~1.5s window). Errors always toast.
+When run interactively (`shotpaste watch` from a desktop session, or auto-started by the installer), shotpaste shows a small system-tray icon with a right-click menu: open watched folders, add or remove folders via a native picker, replay the last screenshot, toggle "Start at login", and toggle success/error toast notifications. A toast pops up on each successful push (bursts coalesce inside a ~1.5s window). Errors always toast.
+
+When watching two or more folders the menu collapses into a **Watched folders ▶** submenu — each entry expands to "Open in file manager" and "Remove from watch list". The "Add watched folder…" item is always present.
 
 Skip the tray with `shotpaste watch --headless` — useful in SSH sessions, servers, or when running under another supervisor. Linux without a display (`$DISPLAY` and `$WAYLAND_DISPLAY` both unset) auto-detects and falls back to headless.
 
@@ -162,7 +186,6 @@ Remove-Item ~\.cargo\bin\shotpaste.exe
 
 Considering for future releases (no commitments):
 
-- Custom watch folders (multiple dirs, OneDrive, Dropbox)
 - Per-format toggles (disable file-drop on systems where it conflicts)
 - Optional auto-upload format (imgur / 0x0.st URL alongside image+file+path, opt-in only)
 - Filename templates (`{app}_{yyyy-MM-dd}_{HHmmss}.png`)

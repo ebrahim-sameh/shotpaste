@@ -15,6 +15,11 @@ use tracing::{debug, error, info, warn};
 /// LRU, since at this size the policy doesn't matter.
 const SEEN_CAP: usize = 256;
 
+/// How often the loop wakes to check the shutdown channel. Trade-off:
+/// shorter = more responsive Quit / dir reconfiguration, slightly more CPU
+/// idle. 500 ms is invisible to the user and effectively zero CPU.
+const SHUTDOWN_POLL: Duration = Duration::from_millis(500);
+
 /// Observer for the watcher loop. The headless CLI path uses [`LogSink`];
 /// tray mode uses a `ChannelSink` (defined in `tray.rs`) that forwards
 /// events into the event loop. Decoupling lets the watcher stay free of
@@ -33,13 +38,36 @@ impl WatcherSink for LogSink {
     fn failed(&self, _path: &Path, _err: &anyhow::Error) {}
 }
 
-/// Watch a directory for newly-created PNG files and push each one to the
-/// clipboard, notifying `sink` after each success/failure. Blocks the
-/// current thread until the channel closes.
-pub fn run<S: WatcherSink>(dir: &Path, sink: S) -> Result<()> {
-    if !dir.exists() {
-        std::fs::create_dir_all(dir)
-            .with_context(|| format!("failed to create watch dir {}", dir.display()))?;
+/// Convenience wrapper for callers that never want to stop the watcher
+/// (the headless CLI path). Creates a never-signaled shutdown channel and
+/// delegates to [`run_until`].
+pub fn run<S: WatcherSink>(dirs: &[PathBuf], sink: S) -> Result<()> {
+    let (_keep_alive_tx, never_stop_rx) = mpsc::channel::<()>();
+    // `_keep_alive_tx` stays in scope until this function returns, so
+    // `never_stop_rx` never sees a disconnect — exactly the semantics
+    // pre-multi-watch had.
+    let result = run_until(dirs, sink, &never_stop_rx);
+    drop(_keep_alive_tx);
+    result
+}
+
+/// Watch one or more directories for newly-created PNG files and push
+/// each one to the clipboard. Returns when:
+///   - `stop` channel receives a value (graceful shutdown), or
+///   - `stop` channel is disconnected (sender dropped — also graceful), or
+///   - the debouncer's event channel disconnects (watcher backend died).
+///
+/// All watch dirs feed one `notify_debouncer_full::Debouncer` and share one
+/// dedup map keyed on full `PathBuf` — so the same screenshot landing in
+/// two watched folders only pushes once, and same-named files in different
+/// folders push independently.
+pub fn run_until<S: WatcherSink>(
+    dirs: &[PathBuf],
+    sink: S,
+    stop: &mpsc::Receiver<()>,
+) -> Result<()> {
+    if dirs.is_empty() {
+        anyhow::bail!("no directories to watch");
     }
 
     let (tx, rx) = mpsc::channel::<DebounceEventResult>();
@@ -48,11 +76,25 @@ pub fn run<S: WatcherSink>(dir: &Path, sink: S) -> Result<()> {
     })
     .context("failed to create file watcher")?;
 
-    debouncer
-        .watch(dir, RecursiveMode::NonRecursive)
-        .with_context(|| format!("failed to watch {}", dir.display()))?;
-
-    info!(dir = %dir.display(), "shotpaste watcher started");
+    // Register each dir individually. If one fails (missing, not a dir,
+    // permission denied) we log and continue — losing all dirs because one
+    // is broken is the wrong default.
+    let mut registered = 0usize;
+    for dir in dirs {
+        match debouncer.watch(dir, RecursiveMode::NonRecursive) {
+            Ok(()) => {
+                info!(dir = %dir.display(), "watching");
+                registered += 1;
+            }
+            Err(e) => {
+                warn!(dir = %dir.display(), error = %e, "skipping unwatchable folder");
+            }
+        }
+    }
+    if registered == 0 {
+        anyhow::bail!("no watchable directories — see preceding warnings");
+    }
+    info!(count = registered, "shotpaste watcher started");
 
     // Dedup pushed screenshots by (mtime, size). Belt-and-suspenders against
     // the event filter: macOS FSEvents and iCloud / Spotlight / xattr churn
@@ -62,9 +104,9 @@ pub fn run<S: WatcherSink>(dir: &Path, sink: S) -> Result<()> {
     // can collide on rapid writes — so we tiebreak with size.
     let mut seen: HashMap<PathBuf, (SystemTime, u64)> = HashMap::new();
 
-    while let Ok(result) = rx.recv() {
-        match result {
-            Ok(events) => {
+    loop {
+        match rx.recv_timeout(SHUTDOWN_POLL) {
+            Ok(Ok(events)) => {
                 for event in events {
                     if !is_new_file_event(&event.kind) {
                         continue;
@@ -101,10 +143,24 @@ pub fn run<S: WatcherSink>(dir: &Path, sink: S) -> Result<()> {
                     }
                 }
             }
-            Err(errors) => {
+            Ok(Err(errors)) => {
                 for e in errors {
                     warn!("watcher error: {e}");
                 }
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                // Periodic wake — check whether we've been asked to stop.
+                match stop.try_recv() {
+                    Ok(()) | Err(mpsc::TryRecvError::Disconnected) => {
+                        info!("watcher stopping");
+                        break;
+                    }
+                    Err(mpsc::TryRecvError::Empty) => continue,
+                }
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                warn!("watcher backend channel closed unexpectedly");
+                break;
             }
         }
     }

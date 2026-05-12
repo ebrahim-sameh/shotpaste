@@ -4,8 +4,9 @@ use std::path::PathBuf;
 use tracing::warn;
 
 /// User-tunable settings persisted to `<config_dir>/shotpaste/config.toml`.
-/// Loaded once at startup; the tray writes back when a check item flips.
-/// Missing or corrupt files quietly fall back to `Config::default()`.
+/// Loaded once at startup; the tray writes back when a check item flips or
+/// the watched-folder list changes. Missing or corrupt files quietly fall
+/// back to `Config::default()`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     /// Show a toast when a screenshot is pushed to the clipboard.
@@ -16,9 +17,15 @@ pub struct Config {
     /// Errors never coalesce.
     #[serde(default = "default_true")]
     pub notify_on_error: bool,
-    /// Override the OS-default screenshot folder. The `--path` arg on
-    /// `shotpaste watch <path>` still wins over this.
+    /// Folders to watch for new PNG screenshots. Empty = use the OS default
+    /// (see `default_watch_dir`). The `shotpaste watch <p1> <p2> …` CLI
+    /// args, when supplied, override this for that invocation only.
     #[serde(default)]
+    pub watch_dirs: Vec<PathBuf>,
+    /// Legacy single-folder field. Kept for one release so v0.2.0 configs
+    /// migrate transparently — `load()` folds any present value into
+    /// `watch_dirs`. Skipped during serialization once it's `None`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub watch_dir: Option<PathBuf>,
 }
 
@@ -31,6 +38,7 @@ impl Default for Config {
         Self {
             notify_on_success: true,
             notify_on_error: true,
+            watch_dirs: Vec::new(),
             watch_dir: None,
         }
     }
@@ -49,7 +57,7 @@ impl Config {
             Ok(p) => p,
             Err(_) => return Self::default(),
         };
-        match std::fs::read_to_string(&path) {
+        let mut cfg = match std::fs::read_to_string(&path) {
             Ok(text) => match toml::from_str::<Config>(&text) {
                 Ok(cfg) => cfg,
                 Err(e) => {
@@ -62,6 +70,18 @@ impl Config {
                 warn!(path = %path.display(), error = %e, "could not read config.toml; using defaults");
                 Self::default()
             }
+        };
+        cfg.migrate_legacy_watch_dir();
+        cfg
+    }
+
+    /// Fold the legacy `watch_dir` field into `watch_dirs` if present, then
+    /// clear it so the next `save()` writes the new schema only.
+    fn migrate_legacy_watch_dir(&mut self) {
+        if let Some(legacy) = self.watch_dir.take()
+            && !self.watch_dirs.iter().any(|p| p == &legacy)
+        {
+            self.watch_dirs.push(legacy);
         }
     }
 

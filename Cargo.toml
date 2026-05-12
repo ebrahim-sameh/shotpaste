@@ -1,6 +1,6 @@
 [package]
 name = "shotpaste"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.85"
 description = "One screenshot, three pastes. Atomic multi-format clipboard (image + file + path) on Windows, macOS, and Linux."
@@ -32,6 +32,7 @@ tray = [
     "dep:tray-icon",
     "dep:notify-rust",
     "dep:tracing-appender",
+    "dep:rfd",
 ]
 
 [dependencies]
@@ -61,6 +62,11 @@ tao = { version = "0.35", optional = true }
 tray-icon = { version = "0.24", default-features = false, features = ["gtk"], optional = true }
 notify-rust = { version = "4", optional = true }
 tracing-appender = { version = "0.2", optional = true }
+# Native folder picker used by the tray's "Add watched folder…" action.
+# Force the `gtk3` backend on Linux so it reuses the GTK runtime tray-icon
+# already needs — avoids pulling in xdg-portal + pollster. Windows uses
+# IFileDialog; macOS uses NSOpenPanel; `gtk3` is a no-op on both.
+rfd = { version = "0.17", default-features = false, features = ["gtk3"], optional = true }
 
 # Windows: drive the clipboard ourselves (open / empty / set three formats / close).
 # We don't use clipboard-rs here because its `set(Vec<ClipboardContent>)` calls
