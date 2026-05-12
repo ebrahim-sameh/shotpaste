@@ -11,6 +11,9 @@ use tracing::warn;
 
 /// The Application User Model ID we register with Windows for branded
 /// toasts. Reverse-DNS form, kept stable so we don't orphan old shortcuts.
+/// Unused on macOS/Linux but kept cross-platform so the `#[cfg]` in `show`
+/// stays a single-line gate.
+#[allow(dead_code)]
 pub const AUMID: &str = "dev.shotpaste.watcher";
 
 static INIT_ONCE: Once = Once::new();

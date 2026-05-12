@@ -54,7 +54,11 @@ fs2 = "0.4"
 
 # Tray + toast deps — optional, gated by the `tray` feature.
 tao = { version = "0.35", optional = true }
-tray-icon = { version = "0.24", optional = true }
+# `default-features = false` drops `libxdo` (sends synthetic key events,
+# requires the system `libxdo` lib we don't ship) but keeps `gtk` so Linux
+# still gets the AppIndicator path. On Windows/macOS the `gtk` feature is
+# a no-op.
+tray-icon = { version = "0.24", default-features = false, features = ["gtk"], optional = true }
 notify-rust = { version = "4", optional = true }
 tracing-appender = { version = "0.2", optional = true }
 
