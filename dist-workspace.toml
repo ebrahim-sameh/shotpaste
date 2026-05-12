@@ -22,10 +22,14 @@ targets = [
 ]
 
 # Linux build needs X11 / Wayland headers for clipboard-rs's x11rb +
-# wl-clipboard-rs deps. dist installs these via apt before `cargo build`.
+# wl-clipboard-rs deps, plus gtk3 + ayatana-appindicator for tray-icon's
+# StatusNotifierItem host on Linux. dist installs these via apt before
+# `cargo build`.
 [dist.dependencies.apt]
 libxcb1-dev = "*"
 libxcb-render0-dev = "*"
 libxcb-shape0-dev = "*"
 libxcb-xfixes0-dev = "*"
 libwayland-dev = "*"
+libgtk-3-dev = "*"
+libayatana-appindicator3-dev = "*"
